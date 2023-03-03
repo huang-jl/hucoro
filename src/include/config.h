@@ -28,6 +28,7 @@ using coroutine_handle = std::experimental::coroutine_handle<T>;
 using suspend_always = std::experimental::suspend_always;
 using suspend_never = std::experimental::suspend_never;
 using std::experimental::noop_coroutine;
+using std::experimental::coroutine_traits;
 }// namespace std
 #    else
 static_assert(false, "could not found coroutine header in clang");

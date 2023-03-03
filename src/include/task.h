@@ -127,26 +127,6 @@ namespace detail {
         std::variant<std::monostate, T*, std::exception_ptr> result_;
     };
 
-    /// the void version of TaskPromise should handled separately,
-    /// since the `std::variant` cannot accept void and we cannot co_return a value in `TaskPromise<void>`
-    template<>
-    class TaskPromise<void> final : public TaskPromiseBase {
-
-    public:
-        Task<void> get_return_object() noexcept;
-
-        void return_void() noexcept {}
-
-        void unhandled_exception() { exception_ptr_ = std::current_exception(); }
-
-        void result() const {
-            if (exception_ptr_) { std::rethrow_exception(exception_ptr_); }
-        }
-
-    private:
-        std::exception_ptr exception_ptr_ = nullptr;
-    };
-
 }// namespace detail
 
 /// Awaiter type of Task<T> to support Task to be `co_await`ed.
@@ -218,10 +198,30 @@ private:
     coroutine_handle_t task_coroutine_;
 };
 
-Task<void> detail::TaskPromise<void>::get_return_object() noexcept {
-    using coroutine_handle_t = std::coroutine_handle<TaskPromise<void>>;
-    return Task{coroutine_handle_t::from_promise(*this)};
-}
+namespace detail {
+    /// the void version of TaskPromise should handled separately,
+    /// since the `std::variant` cannot accept void and we cannot co_return a value in `TaskPromise<void>`
+    template<>
+    class TaskPromise<void> final : public TaskPromiseBase {
+
+    public:
+        Task<void> get_return_object() {
+            using coroutine_handle_t = std::coroutine_handle<TaskPromise<void>>;
+            return Task{coroutine_handle_t::from_promise(*this)};
+        }
+
+        void return_void() noexcept {}
+
+        void unhandled_exception() { exception_ptr_ = std::current_exception(); }
+
+        void result() const {
+            if (exception_ptr_) { std::rethrow_exception(exception_ptr_); }
+        }
+
+    private:
+        std::exception_ptr exception_ptr_ = nullptr;
+    };
+}// namespace detail
 
 }// namespace hucoro
 

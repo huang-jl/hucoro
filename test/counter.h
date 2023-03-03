@@ -19,6 +19,7 @@ namespace test {
         Counter& operator=(Counter&&) = default;
 
         static inline std::size_t alive_num() { return default_ctor_num + copy_ctor_num + move_ctor_num - dtor_num; }
+        static inline std::size_t total_default_ctor_num()  { return default_ctor_num; }
         static inline std::size_t total_copy_num()  { return copy_ctor_num; }
         static inline std::size_t total_move_num() { return move_ctor_num; }
 

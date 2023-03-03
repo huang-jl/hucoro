@@ -14,17 +14,24 @@ namespace {
     using handle_t = std::coroutine_handle<>;
 }// namespace
 
+/*
+ * Awaiter / Awaitable related traits
+ */
+
 template<typename T, typename U = void>
 struct is_awaiter : std::false_type {};
 
 template<typename T>
-struct is_awaiter<T, std::enable_if_t<
-                             std::is_same_v<decltype(std::declval<T>().await_resume(), std::declval<T>().await_ready()), bool> &&
-                                     std::disjunction_v<
-                                             std::is_void<decltype(std::declval<T>().await_suspend(std::declval<handle_t>()))>,
-                                             std::is_same<decltype(std::declval<T>().await_suspend(std::declval<handle_t>())), bool>,
-                                             std::is_same<decltype(std::declval<T>().await_suspend(std::declval<handle_t>())), handle_t>>,
-                             void>> : std::true_type {
+struct is_awaiter<
+        T,
+        std::enable_if_t<
+                std::is_same_v<decltype(std::declval<T>().await_resume(), std::declval<T>().await_ready()), bool> &&
+                        std::disjunction_v<
+                                std::is_void<decltype(std::declval<T>().await_suspend(std::declval<handle_t>()))>,
+                                std::is_same<decltype(std::declval<T>().await_suspend(std::declval<handle_t>())), bool>,
+                                std::is_same<decltype(std::declval<T>().await_suspend(std::declval<handle_t>())),
+                                             handle_t>>,
+                void>> : std::true_type {
     using await_return_type = decltype(std::declval<T>().await_resume());
 };
 
@@ -48,10 +55,9 @@ struct awaitable_traits<T, std::enable_if_t<is_awaiter_v<decltype(operator co_aw
 };
 
 template<typename T>
-struct awaitable_traits<T, std::enable_if_t<
-                                   !is_awaiter_v<decltype(std::declval<T>().operator co_await())> &&
-                                   !is_awaiter_v<decltype(operator co_await(std::declval<T>()))> &&
-                                   is_awaiter_v<T>>> {
+struct awaitable_traits<
+        T, std::enable_if_t<!is_awaiter_v<decltype(std::declval<T>().operator co_await())> &&
+                            !is_awaiter_v<decltype(operator co_await(std::declval<T>()))> && is_awaiter_v<T>>> {
     using awaiter_type = T;
     using await_return_type = typename is_awaiter<T>::await_return_type;
 };
@@ -65,6 +71,19 @@ struct is_awaitable<T, std::void_t<typename awaitable_traits<T>::awaiter_type>> 
 
 template<typename T>
 inline constexpr bool is_awaitable_v = is_awaitable<T, void>::value;
+
+template<typename T, typename = void>
+struct remove_rvalue_reference {
+    using type = T;
+};
+
+template<typename T>
+struct remove_rvalue_reference<T&&> {
+    using type = T;
+};
+
+template<typename T>
+using remove_rvalue_reference_t = typename remove_rvalue_reference<T>::type;
 
 }// namespace hucoro
 

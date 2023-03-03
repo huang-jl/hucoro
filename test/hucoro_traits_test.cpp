@@ -16,13 +16,13 @@ using hucoro::Task;
 
 struct Foo {};
 
-TEST_CASE("awaiter", "[Tratis]") {
+TEST_CASE("awaiter", "[Traits]") {
     REQUIRE(is_awaiter<decltype(std::declval<Task<int>>().operator co_await())>::value == true);
     REQUIRE(is_awaiter<Task<int&>>::value == false);
     REQUIRE(is_awaiter<Foo>::value == false);
 }
 
-TEST_CASE("awaitable", "[Tratis]") {
+TEST_CASE("awaitable", "[Traits]") {
     REQUIRE(is_awaitable<Task<int>>::value == true);
     REQUIRE(is_awaitable<Foo>::value == false);
     REQUIRE(std::is_same_v<awaitable_traits<Task<int>>::await_return_type, int&&>);

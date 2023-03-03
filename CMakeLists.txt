@@ -4,6 +4,7 @@ project(hucoro)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
     # using regular Clang or AppleClang
@@ -15,9 +16,9 @@ else()
 endif ()
 
 
-add_library(hucoro INTERFACE)
-target_include_directories(hucoro INTERFACE ${PROJECT_SOURCE_DIR}/src/include)
-target_compile_options(hucoro INTERFACE ${COROUTINE_OPTION})
+add_library(hucoro src/single_thread_scheduler.cpp)
+target_include_directories(hucoro PUBLIC ${PROJECT_SOURCE_DIR}/src/include)
+target_compile_options(hucoro PUBLIC ${COROUTINE_OPTION})
 set_target_properties(hucoro PROPERTIES LINKER_LANGUAGE CXX)
 
 
