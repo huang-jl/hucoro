@@ -138,6 +138,7 @@ namespace detail {
 
     public:
         explicit TaskAwaiterBase(coroutine_handle_t handle) noexcept : task_coroutine_(handle) {}
+        TaskAwaiterBase(TaskAwaiterBase&& other) { task_coroutine_ = other.task_coroutine_; };
         bool await_ready() noexcept { return task_coroutine_.done(); }
         std::coroutine_handle<> await_suspend(std::coroutine_handle<> await_coroutine) noexcept {
             task_coroutine_.promise().awaiting_coroutine_ = await_coroutine;
@@ -175,22 +176,22 @@ public:
 
     auto operator co_await() & noexcept {
 
-        class TaskAwaiter : public detail::TaskAwaiterBase<T> {
+        class TaskAwaiterL : public detail::TaskAwaiterBase<T> {
         public:
             using detail::TaskAwaiterBase<T>::TaskAwaiterBase;
             decltype(auto) await_resume() { return this->task_coroutine_.promise().result(); }
         };
 
-        return TaskAwaiter{task_coroutine_};
+        return TaskAwaiterL{task_coroutine_};
     }
 
     auto operator co_await() && noexcept {
-        class TaskAwaiter : public detail::TaskAwaiterBase<T> {
+        class TaskAwaiterR : public detail::TaskAwaiterBase<T> {
         public:
             using detail::TaskAwaiterBase<T>::TaskAwaiterBase;
             decltype(auto) await_resume() { return std::move(this->task_coroutine_.promise()).result(); }
         };
-        return TaskAwaiter{task_coroutine_};
+        return TaskAwaiterR{task_coroutine_};
     }
 
 private:

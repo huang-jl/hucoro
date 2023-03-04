@@ -8,94 +8,72 @@
 #include "config.h"
 #include "exception.h"
 #include "hucoro_traits.h"
+#include "spawn_task.h"
 #include "task.h"
 #include <deque>
 #include <mutex>
+#include <type_traits>
 #include <variant>
 
 namespace hucoro {
-namespace detail {
-    template<typename SCHEDULER>
-    class ScheduledOperation {
-        friend SCHEDULER;
-
-    public:
-        explicit ScheduledOperation(SCHEDULER& scheduler) : scheduler_(scheduler) {}
-        bool await_ready() { return false; }
-        void await_suspend(std::coroutine_handle<> awaiting_coroutine);
-        void await_resume() {}
-
-    private:
-        std::coroutine_handle<> awaiting_coroutine_;
-        SCHEDULER& scheduler_;
-    };
-
-    template<typename SCHEDULER>
-    ScheduledOperation(SCHEDULER& scheduler) -> ScheduledOperation<SCHEDULER>;
-
-
-    template<typename SCHEDULER>
-    void ScheduledOperation<SCHEDULER>::await_suspend(std::coroutine_handle<> awaiting_coroutine) {
-        awaiting_coroutine_ = awaiting_coroutine;
-        scheduler_.schedule(this);
-    }
-}// namespace detail
+namespace detail {}// namespace detail
 
 // single thread scheduler
 class SingleThreadScheduler {
-    using schedule_operation_t = detail::ScheduledOperation<SingleThreadScheduler>;
 
 public:
-    void schedule(schedule_operation_t* task);
+    void schedule(SpawnTask&& task);
 
-    template<typename FUNC, typename = std::enable_if_t<is_awaitable_v<decltype(std::declval<FUNC>()())>>>
-    auto block_on(FUNC&& func);
+    template<typename FUNC>
+    auto block_on(FUNC func, std::enable_if_t<is_awaitable_v<decltype(func())>, int> = 0);
 
-
-    /// The returned type of spawn is hucoro::Task
-    // TODO: how to implement detach (destroy the coroutine frame correctly without RAII) ?
+    /// The returned type of spawn is hucoro::SpawnTask
     template<typename FUNC>
     static auto spawn(FUNC&& func) {
         if (!CURRENT_SCHEDULER) {
-            throw HuCoroGeneralErr("Try spawn out side the scope of scheduler, which is not supported for now");
+            throw HuCoroGeneralErr("Try spawn out side the scope of scheduler, which "
+                                   "is not supported for now");
         }
-        return CURRENT_SCHEDULER->spawn_impl(std::forward<FUNC>(func));
+        auto [join_handle, spawn_task] = CURRENT_SCHEDULER->spawn_impl(std::forward<FUNC>(func));
+        // should not use spawn_task after this
+        CURRENT_SCHEDULER->schedule(std::move(spawn_task));
+        return std::move(join_handle);
     }
 
     thread_local static SingleThreadScheduler* CURRENT_SCHEDULER;
 
 private:
     template<typename FUNC>
-    Task<void>
-    spawn_impl(FUNC&& func,
+    std::pair<JoinHandle<void>, SpawnTask>
+    spawn_impl(FUNC func,
                std::enable_if_t<std::is_same_v<typename awaitable_traits<decltype(func())>::await_return_type, void>,
                                 int> = 0) {
-        detail::ScheduledOperation schedule_op{*this};
-        co_await schedule_op;
         co_await func();
     }
 
     template<typename FUNC>
     auto
-    spawn_impl(FUNC&& func,
+    spawn_impl(FUNC func,
                std::enable_if_t<!std::is_same_v<typename awaitable_traits<decltype(func())>::await_return_type, void>,
                                 int> = 0)
-            -> Task<remove_rvalue_reference_t<typename awaitable_traits<decltype(func())>::await_return_type>> {
+            -> std::pair<
+                    JoinHandle<std::remove_reference_t<typename awaitable_traits<decltype(func())>::await_return_type>>,
+                    SpawnTask> {
 
-        detail::ScheduledOperation schedule_op{*this};
-        co_await schedule_op;
         co_return co_await func();
     }
 
     /* data member */
-    std::deque<schedule_operation_t*> tasks_;
+    std::deque<SpawnTask> tasks_;
 };
 
+// A special task and promise for block_on
 namespace detail {
     /// This EntryPromise is almose the same as TaskPromise, except:
-    /// 1. It will not need to resume the awaiting coroutine, since there will not be any awaiting coroutine
-    /// (so it does need a variable to save it).
-    /// 2. It will need to sync with the main / the caller of `Entry::run()` in final_suspend()
+    /// 1. It will not need to resume the awaiting coroutine, since there will not
+    /// be any awaiting coroutine (so it does need a variable to save it).
+    /// 2. It will need to sync with the main / the caller of `Entry::run()` in
+    /// final_suspend()
     template<typename RESULT>
     class BlockOnPromise;
 
@@ -128,7 +106,6 @@ namespace detail {
     private:
         coroutine_handle_t coroutine_handle_;
     };
-
 
     class BlockOnPromiseBase {
     public:
@@ -172,11 +149,11 @@ namespace detail {
         }
 
     private:
-        // Result (i.e. The return value of `co_await awaitable`) is supposed to store in the awaitable promise (e.g. TaskPromise).
-        // It will not need to copy/move into here. We just use a pointer.
+        // Result (i.e. The return value of `co_await awaitable`) is supposed to store
+        // in the awaitable promise (e.g. TaskPromise). It will not need to copy/move
+        // into here. We just use a pointer.
         std::variant<std::monostate, RESULT*, std::exception_ptr> result_;
     };
-
 
     template<>
     class BlockOnPromise<void> : public BlockOnPromiseBase {
@@ -192,9 +169,10 @@ namespace detail {
     };
 
     namespace {
-        // The lifetime of awaitable end after the return value (i.e. `BlockOnTask`) has out of scope,
-        // since the coroutine frame will be destroyed with RAII:
-        // 1. It is safe to store a pointer to return value in BlockOnTaskPromise (awaitable still alive)
+        // The lifetime of awaitable end after the return value (i.e. `BlockOnTask`) has
+        // out of scope, since the coroutine frame will be destroyed with RAII:
+        // 1. It is safe to store a pointer to return value in BlockOnTaskPromise
+        // (awaitable still alive)
         // 2. In `block_on` we cannot return a reference (no matter rvalue or lvalue),
         // since the block_on_task will be destroyed in the `block_on`
         template<typename Awaitable, typename await_return_without_ref = std::remove_reference_t<
@@ -214,8 +192,8 @@ namespace detail {
 
 }// namespace detail
 
-template<typename FUNC, typename>
-auto SingleThreadScheduler::block_on(FUNC&& func) {
+template<typename FUNC>
+auto SingleThreadScheduler::block_on(FUNC func, std::enable_if_t<is_awaitable_v<decltype(func())>, int>) {
     // set the thread local variable
     CURRENT_SCHEDULER = this;
 
@@ -228,9 +206,9 @@ auto SingleThreadScheduler::block_on(FUNC&& func) {
         // pop task from task queue to execute
         for (int i = 0; i < 10; ++i) {
             if (tasks_.empty()) { continue; }
-            schedule_operation_t* task = tasks_.front();
+            SpawnTask task = std::move(tasks_.front());
             tasks_.pop_front();
-            task->awaiting_coroutine_.resume();
+            task.resume();
         }
     }
 
@@ -243,4 +221,4 @@ FINISH_BLOCK_ON:
 }
 
 }// namespace hucoro
-#endif//HUCORO_SINGLE_THREAD_SCHEDULER_H
+#endif// HUCORO_SINGLE_THREAD_SCHEDULER_H

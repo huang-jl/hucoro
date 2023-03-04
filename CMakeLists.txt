@@ -16,7 +16,7 @@ else()
 endif ()
 
 
-add_library(hucoro src/single_thread_scheduler.cpp)
+add_library(hucoro src/single_thread_scheduler.cpp src/spawn_task.cpp)
 target_include_directories(hucoro PUBLIC ${PROJECT_SOURCE_DIR}/src/include)
 target_compile_options(hucoro PUBLIC ${COROUTINE_OPTION})
 set_target_properties(hucoro PROPERTIES LINKER_LANGUAGE CXX)

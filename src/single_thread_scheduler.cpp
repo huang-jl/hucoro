@@ -6,7 +6,7 @@
 
 namespace hucoro {
 
-void SingleThreadScheduler::schedule(SingleThreadScheduler::schedule_operation_t* task) { tasks_.push_back(task); }
+void SingleThreadScheduler::schedule(SpawnTask&& task) { tasks_.push_back(static_cast<SpawnTask&&>(task)); }
 
 thread_local SingleThreadScheduler* SingleThreadScheduler::CURRENT_SCHEDULER = nullptr;
 

@@ -10,7 +10,7 @@
 
 
 using hucoro::awaitable_traits;
-using hucoro::is_awaitable;
+using hucoro::is_awaitable_v;
 using hucoro::is_awaiter;
 using hucoro::Task;
 
@@ -23,7 +23,7 @@ TEST_CASE("awaiter", "[Traits]") {
 }
 
 TEST_CASE("awaitable", "[Traits]") {
-    REQUIRE(is_awaitable<Task<int>>::value == true);
-    REQUIRE(is_awaitable<Foo>::value == false);
+    REQUIRE(is_awaitable_v<Task<int>> == true);
+    REQUIRE(is_awaitable_v<Foo> == false);
     REQUIRE(std::is_same_v<awaitable_traits<Task<int>>::await_return_type, int&&>);
 }

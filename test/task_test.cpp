@@ -21,7 +21,7 @@ TEST_CASE("Simple Task Test without running", "[Task]") {
         REQUIRE(Counter::alive_num() <= 1);
         compiler_opt = (Counter::alive_num() == 0);
     }
-    REQUIRE(Counter::alive_num()== 0);
+    REQUIRE(Counter::alive_num() == 0);
 }
 
 TEST_CASE("Simple Task Test", "[Task]") {
@@ -31,7 +31,7 @@ TEST_CASE("Simple Task Test", "[Task]") {
     {
         REQUIRE(Counter::alive_num() == 0);
         // there is a move ctor to create the counter
-        auto counter = scheduler.block_on([]() -> Task<Counter> { co_return Counter{}; });
+        auto _ = scheduler.block_on([]() -> Task<Counter> { co_return Counter{}; });
         REQUIRE(Counter::alive_num() == 1);
         // ctor happened in `Counter{}`
         REQUIRE(Counter::total_default_ctor_num() - before_default_ctor_num == 1);
@@ -51,9 +51,10 @@ TEST_CASE("Simple Task Test", "[Task]") {
 
 TEST_CASE("Spawn Task", "[Task]") {
     hucoro::SingleThreadScheduler scheduler;
-    auto val = scheduler.block_on([]() -> Task<int> {
-        auto val = co_await hucoro::SingleThreadScheduler::spawn([]() -> Task<int> { co_return 100; });
-        co_return val;
+    int a = 1;
+    auto val = scheduler.block_on([&]() -> Task<int> {
+        co_await hucoro::SingleThreadScheduler::spawn([&]() -> Task<int> { co_return ++a; });
+        co_return ++a;
     });
-    REQUIRE(val == 100);
+    REQUIRE(a == 3);
 }

@@ -72,6 +72,25 @@ struct is_awaitable<T, std::void_t<typename awaitable_traits<T>::awaiter_type>> 
 template<typename T>
 inline constexpr bool is_awaitable_v = is_awaitable<T, void>::value;
 
+template<typename Awaitable>
+auto get_awaiter(
+        Awaitable&& awaitable,
+        std::enable_if_t<is_awaiter_v<decltype(std::forward<Awaitable>(awaitable).operator co_await())>, int> = 0) {
+    return std::forward<Awaitable>(awaitable).operator co_await();
+}
+
+template<typename Awaitable>
+auto get_awaiter(
+        Awaitable&& awaitable,
+        std::enable_if_t<is_awaiter_v<decltype(operator co_await(std::forward<Awaitable>(awaitable)))>, int> = 0) {
+    return operator co_await(std::forward<Awaitable>(awaitable));
+}
+
+template<typename Awaitable>
+decltype(auto) get_awaiter(Awaitable&& awaitable, std::enable_if_t<is_awaiter_v<decltype(awaitable)>, int> = 0) {
+    return static_cast<Awaitable&&>(awaitable);
+}
+
 template<typename T, typename = void>
 struct remove_rvalue_reference {
     using type = T;
